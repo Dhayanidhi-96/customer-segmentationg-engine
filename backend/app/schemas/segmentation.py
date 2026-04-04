@@ -50,3 +50,98 @@ class SegmentProfile(BaseModel):
     avg_frequency: float
     avg_monetary: float
     total_revenue: float
+
+
+class FeatureExplanation(BaseModel):
+    """Individual feature contribution to SHAP score"""
+    feature: str
+    value: float
+    contribution: float
+
+
+class ExplanationResponse(BaseModel):
+    """Full SHAP explanation response"""
+    target_cluster: int
+    base_value: float
+    feature_explanations: List[FeatureExplanation]
+
+
+class ModelComparisonItem(BaseModel):
+    """Single model metrics for comparison lab"""
+    model_name: str
+    silhouette_score: float
+    davies_bouldin: float
+    calinski_harabasz: float
+    n_clusters: int
+    training_time_ms: float
+
+class ModelComparisonResponse(BaseModel):
+    """Full model comparison lab response"""
+    sample_size: int
+    models: List[ModelComparisonItem]
+
+
+class EmailGenerationResponse(BaseModel):
+    """Email generation response from Generative AI"""
+    subject: str
+    body: str
+    is_simulated: bool
+
+
+class AIChatRequest(BaseModel):
+    """Request payload for AI analyst chat."""
+    message: str
+
+
+class AIChatResponse(BaseModel):
+    """Response payload for AI analyst chat."""
+    answer: str
+    used_groq: bool
+    fallback_reason: Optional[str] = None
+
+
+class DiscountCampaignRequest(BaseModel):
+    """Request for sending discount campaigns to segmented customers."""
+    segment_name: Optional[str] = None
+    discount_percent: float = 10.0
+    discount_code: Optional[str] = None
+    campaign_id: Optional[str] = None
+    limit: Optional[int] = None
+    dry_run: bool = False
+    force_resend: bool = False
+
+
+class CampaignDispatchLogItem(BaseModel):
+    """Individual campaign dispatch log line."""
+    campaign_id: str
+    customer_id: Optional[str]
+    email: str
+    segment_name: Optional[str]
+    delivery_status: str
+    is_duplicate: bool
+    provider_message: Optional[str]
+    created_at: Optional[str]
+
+
+class DiscountCampaignResponse(BaseModel):
+    """Outcome of a discount campaign send operation."""
+    campaign_id: str
+    target_segment: str
+    total_candidates: int
+    valid_emails: int
+    sent: int
+    simulated: int
+    skipped_duplicates: int
+    failed: int
+
+
+class CampaignStatusResponse(BaseModel):
+    """Status summary and recent logs for campaign/email checks."""
+    campaign_id: Optional[str]
+    email: Optional[str]
+    total_logs: int
+    sent: int
+    simulated: int
+    skipped_duplicates: int
+    failed: int
+    items: List[CampaignDispatchLogItem]

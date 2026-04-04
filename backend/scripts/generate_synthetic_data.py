@@ -192,8 +192,8 @@ if __name__ == "__main__":
     print("🚀 SYNTHETIC DATA GENERATION")
     print("="*60 + "\n")
     
-    # Generate data
-    df = generate_synthetic_customers(n_customers=5000)
+    # Generate data (Upgraded from 5k to 1 Lakh for massive scale testing)
+    df = generate_synthetic_customers(n_customers=100000)
     
     # Save data
     save_data(df)

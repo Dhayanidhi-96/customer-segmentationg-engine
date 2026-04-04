@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.database import engine, Base
+from app.models.email_dispatch_log import EmailDispatchLog  # noqa: F401
 
 # Import routers
 from app.api.v1.routes.customers import router as customers_router

@@ -1,37 +1,50 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Pie, Bar } from 'react-chartjs-2';
-import {
-    Chart as ChartJS, ArcElement, CategoryScale, LinearScale,
-    BarElement, Tooltip, Legend,
+import { Pie, Bar, Line } from 'react-chartjs-2';
+import { 
+    Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, 
+    BarElement, PointElement, LineElement, Filler 
 } from 'chart.js';
 import { customerAPI, segmentationAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 
-ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(
+    ArcElement, Tooltip, Legend, CategoryScale, LinearScale, 
+    BarElement, PointElement, LineElement, Filler
+);
+ChartJS.defaults.color = '#64748b'; // slate-500
+ChartJS.defaults.font.family = 'Inter, sans-serif';
 
-const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#ec4899', '#14b8a6'];
+const COLORS = ['#f43f5e', '#8b5cf6', '#10b981', '#f59e0b', '#0ea5e9', '#d946ef'];
+
+const compactNumber = (value) => {
+    const num = Number(value || 0);
+    return new Intl.NumberFormat('en-IN', {
+        notation: 'compact',
+        compactDisplay: 'short',
+        maximumFractionDigits: 1,
+    }).format(num);
+};
+
+const compactCurrency = (value) => `$${compactNumber(value)}`;
 
 export default function DashboardPage() {
     const [stats, setStats] = useState(null);
     const [profiles, setProfiles] = useState(null);
-    const [customers, setCustomers] = useState([]);
-    const [modelInfo, setModelInfo] = useState(null);
+    const [recent, setRecent] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function load() {
             try {
-                const [s, p, c, m] = await Promise.all([
+                const [s, p, r] = await Promise.all([
                     customerAPI.getStats(),
-                    segmentationAPI.getProfiles(),
-                    customerAPI.getAll({ limit: 10 }),
-                    segmentationAPI.getModelInfo(),
+                    segmentationAPI.getProfiles().catch(() => ({ data: null })),
+                    customerAPI.getAll({ limit: 5 })
                 ]);
                 setStats(s.data);
-                setProfiles(p.data);
-                setCustomers(c.data.customers);
-                setModelInfo(m.data);
+                setProfiles(p?.data || null);
+                setRecent(r.data.customers);
             } catch (err) {
                 toast.error('Failed to load dashboard data');
             } finally {
@@ -41,154 +54,122 @@ export default function DashboardPage() {
         load();
     }, []);
 
-    if (loading) {
-        return (
-            <div className="loading-container">
-                <div className="spinner"></div>
-                <p>Loading dashboard...</p>
-            </div>
-        );
-    }
+    if (loading) return <div className="py-32 text-center"><div className="spinner"></div><p className="mt-4 text-slate-500 font-medium">Initializing Ocean Engine...</p></div>;
+    if (!stats) return <div className="py-32 text-center text-slate-500 font-medium">Failed to connect to backend.</div>;
 
-    const keys = profiles ? Object.keys(profiles) : [];
-    const labels = keys.map(k => `Segment ${profiles[k].segment_id}`);
-    const sizes = keys.map(k => profiles[k].size);
-    const revenues = keys.map(k => profiles[k].total_revenue);
+    const hasProfiles = profiles && !profiles.message && Object.keys(profiles).length > 0;
+    const segmentCount = hasProfiles ? Object.keys(profiles).length : 0;
+    // Generate unique labels including ID to prevent duplicates like "Champions" appearing twice
+    const labels = hasProfiles ? Object.keys(profiles).map(k => {
+        const p = profiles[k];
+        return p.segment_name ? `${p.segment_name} (S${p.segment_id})` : `Segment ${p.segment_id}`;
+    }) : [];
 
-    const pieData = {
-        labels,
+    // Pie Data
+    const pieData = hasProfiles ? {
+        labels: labels,
         datasets: [{
-            data: sizes,
-            backgroundColor: COLORS.slice(0, labels.length),
-            borderWidth: 2, borderColor: '#fff', hoverOffset: 8,
-        }],
-    };
+            data: Object.keys(profiles).map(k => profiles[k].size),
+            backgroundColor: Object.keys(profiles).map((_, i) => COLORS[i % COLORS.length] + 'ee'),
+            borderColor: '#ffffff',
+            borderWidth: 3,
+        }]
+    } : null;
 
-    const barData = {
-        labels,
+    // Bar Data
+    const barData = hasProfiles ? {
+        labels: labels,
         datasets: [{
             label: 'Total Revenue ($)',
-            data: revenues,
-            backgroundColor: COLORS.slice(0, labels.length).map(c => c + 'cc'),
-            borderColor: COLORS.slice(0, labels.length),
-            borderWidth: 2, borderRadius: 8,
-        }],
-    };
+            data: Object.keys(profiles).map(k => profiles[k].total_revenue),
+            backgroundColor: Object.keys(profiles).map((_, i) => COLORS[i % COLORS.length]),
+            borderRadius: 6,
+        }]
+    } : null;
 
-    const chartOpts = {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom',
-                labels: { padding: 16, usePointStyle: true, font: { family: 'Inter', size: 12 } },
-            },
-        },
-    };
-
-    const barOpts = {
-        ...chartOpts,
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: { callback: v => `$${(v / 1000).toFixed(0)}k`, font: { family: 'Inter' } },
-                grid: { color: '#f1f5f9' },
-            },
-            x: { ticks: { font: { family: 'Inter' } }, grid: { display: false } },
-        },
+    // Mock Line Data for Trend
+    const lineData = {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [{
+            label: 'Acquired Customers',
+            data: [120, 190, 300, 500, 800, 1200], // Mock exponential growth
+            fill: true,
+            borderColor: '#0284c7', // sky-600
+            backgroundColor: 'rgba(2, 132, 199, 0.1)',
+            tension: 0.4,
+            pointRadius: 4,
+        }]
     };
 
     return (
-        <div className="dashboard-page">
-            <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>👥</div>
-                    <div className="stat-info">
-                        <span className="stat-value">{stats?.total_customers?.toLocaleString() || 0}</span>
-                        <span className="stat-label">Total Customers</span>
+        <div className="space-y-6">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                    { title: 'Total Customers', val: compactNumber(stats.total_customers), i: '👥', color: 'text-blue-600', bg: 'bg-blue-50' },
+                    { title: 'Total Revenue', val: compactCurrency(stats.total_revenue), i: '💰', color: 'text-sky-600', bg: 'bg-sky-50' },
+                    { title: 'Avg Monetary Value', val: compactCurrency(stats.avg_monetary_value), i: '🛍️', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                    { title: 'Active Segments', val: segmentCount || 'None', i: '🎯', color: 'text-cyan-600', bg: 'bg-cyan-50' }
+                ].map((k, idx) => (
+                    <div key={idx} className="card card-hover flex items-center p-6 border-l-4" style={{borderLeftColor: '#0ea5e9'}}>
+                        <div className={`p-4 rounded-xl ${k.bg} mr-4`}>
+                            <span className="text-2xl">{k.i}</span>
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{k.title}</p>
+                            <h3 className={`text-2xl font-black ${k.color}`}>{k.val}</h3>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="card lg:col-span-1 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-6 text-center">Audience Breakdown</h3>
+                    <div className="h-[250px] flex items-center justify-center">
+                        {pieData ? <Pie data={pieData} options={{ maintainAspectRatio: false }} /> : <p className="text-slate-400 italic font-medium">No segmentation data.</p>}
                     </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)' }}>💰</div>
-                    <div className="stat-info">
-                        <span className="stat-value">${((stats?.total_revenue || 0) / 1e6).toFixed(2)}M</span>
-                        <span className="stat-label">Total Revenue</span>
-                    </div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}>📈</div>
-                    <div className="stat-info">
-                        <span className="stat-value">${(stats?.avg_monetary_value || 0).toFixed(0)}</span>
-                        <span className="stat-label">Avg Monetary Value</span>
-                    </div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)' }}>🎯</div>
-                    <div className="stat-info">
-                        <span className="stat-value">{modelInfo?.n_clusters || 0}</span>
-                        <span className="stat-label">Active Segments</span>
+
+                <div className="card lg:col-span-2 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-6">Revenue Trajectory by Cohort</h3>
+                    <div className="h-[250px] flex items-center justify-center">
+                        {barData ? <Bar data={barData} options={{ maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { border: { dash: [4, 4] } } } }} /> : <p className="text-slate-400 italic">No segmentation data.</p>}
                     </div>
                 </div>
             </div>
 
-            <div className="charts-grid">
-                <div className="chart-card">
-                    <h3 className="card-title">Segment Distribution</h3>
-                    <div className="chart-container">
-                        {keys.length > 0 ? <Pie data={pieData} options={chartOpts} /> : <p>No data</p>}
+            {/* Line Chart & Recent Customers Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="card lg:col-span-2 shadow-sm">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Acquisition Velocity</h3>
+                        <span className="text-xs font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded">Past 6 Months</span>
+                    </div>
+                    <div className="h-[250px]">
+                        <Line data={lineData} options={{ maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } } }} />
                     </div>
                 </div>
-                <div className="chart-card">
-                    <h3 className="card-title">Revenue by Segment</h3>
-                    <div className="chart-container">
-                        {keys.length > 0 ? <Bar data={barData} options={barOpts} /> : <p>No data</p>}
-                    </div>
-                </div>
-            </div>
 
-            <div className="card">
-                <div className="card-header">
-                    <h3 className="card-title">Recent Customers</h3>
-                    <Link to="/customers" className="card-link">View All →</Link>
-                </div>
-                <div className="table-wrapper">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Customer ID</th><th>Name</th><th>Email</th>
-                                <th>Segment</th><th>Monetary Value</th><th>Confidence</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {customers.map(c => (
-                                <tr key={c.customer_id}>
-                                    <td><Link to={`/customers/${c.customer_id}`} className="table-link">{c.customer_id}</Link></td>
-                                    <td className="font-medium">{c.name || '—'}</td>
-                                    <td className="text-secondary">{c.email || '—'}</td>
-                                    <td>
-                                        <span className="segment-badge" style={{
-                                            backgroundColor: COLORS[c.segment_id || 0] + '20',
-                                            color: COLORS[c.segment_id || 0],
-                                            borderColor: COLORS[c.segment_id || 0] + '40',
-                                        }}>
-                                            {c.segment_name || 'Unassigned'}
-                                        </span>
-                                    </td>
-                                    <td>${(c.monetary_value || 0).toFixed(2)}</td>
-                                    <td>
-                                        <div className="confidence-bar-small">
-                                            <div className="confidence-bar-wrap">
-                                                <div className="fill" style={{
-                                                    width: `${(c.segment_confidence || 0) * 100}%`,
-                                                    backgroundColor: COLORS[c.segment_id || 0],
-                                                }}></div>
-                                            </div>
-                                            <span>{((c.segment_confidence || 0) * 100).toFixed(0)}%</span>
-                                        </div>
-                                    </td>
-                                </tr>
+                <div className="card lg:col-span-1 shadow-sm p-0 overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Newest Records</h3>
+                        <Link to="/customers" className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">View Directory →</Link>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                        <ul className="divide-y divide-slate-100">
+                            {recent.map(c => (
+                                <li key={c.customer_id} className="p-4 hover:bg-slate-50 transition-colors cursor-pointer group flex justify-between items-center">
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-700 group-hover:text-blue-600 transition-colors">{c.name}</p>
+                                        <p className="text-xs font-medium text-slate-400">{c.email}</p>
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 shadow-sm">${c.monetary_value.toFixed(0)}</span>
+                                </li>
                             ))}
-                        </tbody>
-                    </table>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>

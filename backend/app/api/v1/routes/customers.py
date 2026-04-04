@@ -12,12 +12,14 @@ from app.schemas.customer import CustomerResponse, CustomerList, CustomerCreate,
 
 router = APIRouter()
 
+from sqlalchemy import or_
 
 @router.get("/", response_model=CustomerList)
 def get_customers(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     segment_id: Optional[int] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -26,12 +28,18 @@ def get_customers(
     - **skip**: Number of records to skip (for pagination)
     - **limit**: Maximum number of records to return
     - **segment_id**: Filter by segment ID (optional)
+    - **search**: Search by name or email (optional)
     """
     query = db.query(Customer)
     
     # Filter by segment if provided
     if segment_id is not None:
         query = query.filter(Customer.segment_id == segment_id)
+        
+    # Search by name or email
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(or_(Customer.name.ilike(search_term), Customer.email.ilike(search_term)))
     
     # Get total count
     total = query.count()
@@ -40,6 +48,32 @@ def get_customers(
     customers = query.offset(skip).limit(limit).all()
     
     return CustomerList(total=total, customers=customers)
+
+
+@router.get("/stats/overview")
+def get_customer_stats(db: Session = Depends(get_db)):
+    """
+    Get overview statistics of customers
+    """
+    from sqlalchemy import func
+    
+    total_customers = db.query(Customer).filter(Customer.is_active == True).count()
+    
+    # Calculate aggregates
+    stats = db.query(
+        func.avg(Customer.recency_days).label('avg_recency'),
+        func.avg(Customer.frequency).label('avg_frequency'),
+        func.avg(Customer.monetary_value).label('avg_monetary'),
+        func.sum(Customer.monetary_value).label('total_revenue')
+    ).filter(Customer.is_active == True).first()
+    
+    return {
+        "total_customers": total_customers,
+        "avg_recency_days": round(stats.avg_recency, 2) if stats.avg_recency else 0,
+        "avg_frequency": round(stats.avg_frequency, 2) if stats.avg_frequency else 0,
+        "avg_monetary_value": round(stats.avg_monetary, 2) if stats.avg_monetary else 0,
+        "total_revenue": round(stats.total_revenue, 2) if stats.total_revenue else 0
+    }
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
@@ -126,30 +160,4 @@ def delete_customer(customer_id: str, db: Session = Depends(get_db)):
     customer.is_active = False
     db.commit()
     
-    return {"message": "Customer deleted successfully", "customer_id": customer_id}
-
-
-@router.get("/stats/overview")
-def get_customer_stats(db: Session = Depends(get_db)):
-    """
-    Get overview statistics of customers
-    """
-    from sqlalchemy import func
-    
-    total_customers = db.query(Customer).filter(Customer.is_active == True).count()
-    
-    # Calculate aggregates
-    stats = db.query(
-        func.avg(Customer.recency_days).label('avg_recency'),
-        func.avg(Customer.frequency).label('avg_frequency'),
-        func.avg(Customer.monetary_value).label('avg_monetary'),
-        func.sum(Customer.monetary_value).label('total_revenue')
-    ).filter(Customer.is_active == True).first()
-    
-    return {
-        "total_customers": total_customers,
-        "avg_recency_days": round(stats.avg_recency, 2) if stats.avg_recency else 0,
-        "avg_frequency": round(stats.avg_frequency, 2) if stats.avg_frequency else 0,
-        "avg_monetary_value": round(stats.avg_monetary, 2) if stats.avg_monetary else 0,
-        "total_revenue": round(stats.total_revenue, 2) if stats.total_revenue else 0
-    }
+    return {"message": "Customer deleted successfully", "customer_id": customer_id}

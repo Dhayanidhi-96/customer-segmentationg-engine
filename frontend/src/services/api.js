@@ -3,7 +3,7 @@ import axios from 'axios';
 const api = axios.create({
     baseURL: '/api/v1',
     headers: { 'Content-Type': 'application/json' },
-    timeout: 10000,
+    timeout: 60000,
 });
 
 api.interceptors.response.use(
@@ -28,6 +28,13 @@ export const segmentationAPI = {
     predictBatch: (limit) => api.post('/segmentation/predict-batch', null, { params: { limit } }),
     getModelInfo: () => api.get('/segmentation/model-info'),
     getProfiles: () => api.get('/segmentation/segment-profiles'),
+    explain: (customerId) => api.get(`/segmentation/explain/${customerId}`),
+    compareModels: () => api.get('/segmentation/compare-models'),
+    retrain: () => api.post('/segmentation/retrain'),
+    generateEmail: (customerId) => api.get(`/segmentation/generate-email/${customerId}`),
+    chatWithAI: (message) => api.post('/segmentation/ai-chat', { message }),
+    sendDiscountCampaign: (payload) => api.post('/segmentation/campaigns/discount/send', payload),
+    getCampaignStatus: (params = {}) => api.get('/segmentation/campaigns/status', { params }),
 };
 
 export default api;

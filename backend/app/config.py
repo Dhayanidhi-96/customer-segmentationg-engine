@@ -1,4 +1,4 @@
-﻿"""
+"""
 Configuration Management
 Handles environment variables and application settings
 """
@@ -45,6 +45,23 @@ class Settings(BaseSettings):
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_FILE_TYPES: List[str] = ["csv", "xlsx", "json"]
+    
+    # Optional Third-Party Services
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_FALLBACK_MODELS: List[str] = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+    ]
+
+    # Optional SMTP settings for campaign sending
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM_EMAIL: str = "noreply@segmentiq.local"
     
     class Config:
         env_file = ".env"
