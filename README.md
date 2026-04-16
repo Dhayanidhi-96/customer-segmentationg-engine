@@ -2,21 +2,22 @@
 
 SegmentIQ is a full-stack analytics platform for customer segmentation, explainability, AI-assisted analysis, and campaign activation.
 
-## What This Project Does
+## Overview
 
-- Predicts customer segments using unsupervised ML models
-- Supports multiple clustering approaches (KMeans, DBSCAN, GMM)
-- Explains segment decisions with SHAP
-- Provides an AI analyst chat endpoint (Groq-enabled with fallback)
-- Generates and dispatches campaign emails with status logging
-- Offers a React dashboard for operations, analysis, and model workflows
+This project provides:
 
-## Stack
+- Customer segmentation using unsupervised ML (GMM, KMeans, DBSCAN support)
+- Segment explainability via SHAP
+- AI analyst chat (Groq-enabled with local fallback)
+- Campaign email generation, sending, and dispatch status tracking
+- React dashboard for customer, segment, campaign, and model operations
+
+## Tech Stack
 
 - Backend: FastAPI, SQLAlchemy, Pydantic, scikit-learn, pandas, numpy, shap
 - Frontend: React, Vite, Tailwind CSS, Chart.js
-- Data store: SQLite by default
-- Deployment: Docker and Docker Compose support
+- Database: SQLite (default)
+- Deployment: Docker + Docker Compose
 
 ## Repository Layout
 
@@ -30,8 +31,10 @@ customer-segmentation-engine/
       models/
       schemas/
       services/
+    data/synthetic/
     scripts/
     tests/
+    models/saved/
     requirements.txt
   frontend/
     src/
@@ -43,15 +46,15 @@ customer-segmentation-engine/
   README.md
 ```
 
-## Local Development
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.10+
 - Node.js 18+
 - npm 9+
 
-### 1. Backend Setup
+## Quick Start (Local)
+
+### 1. Backend setup
 
 ```powershell
 cd backend
@@ -60,7 +63,7 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-Create backend environment file at `backend/.env`:
+Create `backend/.env`:
 
 ```env
 APP_NAME=Customer Segmentation Engine
@@ -82,16 +85,43 @@ SMTP_USE_TLS=True
 SMTP_FROM_EMAIL=noreply@segmentiq.local
 ```
 
-Run backend:
+### 2. Data and database initialization
+
+Run from `backend`:
+
+```powershell
+.\venv\Scripts\Activate
+python scripts\generate_synthetic_data.py
+python scripts\init_db.py
+python scripts\load_data_to_db.py
+```
+
+### 3. Start backend API
 
 ```powershell
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+API docs:
+
 - Swagger: http://127.0.0.1:8000/api/docs
 - ReDoc: http://127.0.0.1:8000/api/redoc
 
-### 2. Frontend Setup
+### 4. Create/deploy the active segmentation model (required)
+
+Current prediction endpoints load a GMM model from `MODEL_STORAGE_PATH/gmm_model.pkl`.
+
+After the API is running and data is loaded, trigger retraining once:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/segmentation/retrain
+```
+
+This trains and saves the active model, then updates customer segment assignments.
+
+### 5. Frontend setup
+
+In a new terminal:
 
 ```powershell
 cd frontend
@@ -99,7 +129,7 @@ npm install
 npm run dev
 ```
 
-- Frontend URL: http://localhost:3000
+Frontend URL: http://localhost:3000
 
 ## Docker Setup
 
@@ -109,27 +139,15 @@ From repository root:
 docker compose up --build
 ```
 
-This starts backend and frontend services as defined in `docker-compose.yml`.
-
-## Data and Model Preparation
-
-Run scripts from `backend` as needed:
-
-```powershell
-.\venv\Scripts\Activate
-python scripts\generate_synthetic_data.py
-python scripts\init_db.py
-python scripts\load_data_to_db.py
-python scripts\train_kmeans.py
-```
+This starts backend and frontend services defined in `docker-compose.yml`.
 
 ## API Summary
 
 Base path: `/api/v1`
 
 - Customers: list, retrieve, create, update, delete, stats
-- Segmentation: single prediction, batch prediction, model info, profiles, explainability, retraining, model comparison
-- AI and Campaigns: AI chat, email generation, campaign send, dispatch status
+- Segmentation: predict, batch predict, model info, segment profiles, explainability, retrain, compare models
+- AI/Campaigns: AI chat, generate email, send discount campaigns, query campaign status
 
 ## Verification
 
@@ -138,10 +156,15 @@ cd backend
 python verify_backend.py
 ```
 
+## Notes
+
+- `scripts\train_kmeans.py` is available for KMeans experimentation.
+- Production prediction endpoints currently load a GMM artifact (`gmm_model.pkl`).
+
 ## Git Hygiene
 
 - Do not commit `node_modules`, virtual environments, `.env`, databases, or model binaries.
-- The repository `.gitignore` is configured to keep these artifacts out of version control.
+- The repository `.gitignore` should exclude these generated artifacts.
 
 ## License
 
